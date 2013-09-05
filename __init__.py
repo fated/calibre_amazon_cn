@@ -36,15 +36,8 @@ class Amazon_CN(Source):
     has_html_comments = True
     supports_gzip_transfer_encoding = True
 
-    AMAZON_DOMAINS = {
-            'cn': _('China'),
-    }
-
-    options = (
-            Option('domain', 'choices', 'com', _('Amazon website to use:'),
-                _('Metadata from Amazon will be fetched using this '
-                    'country\'s Amazon website.'), choices=AMAZON_DOMAINS),
-            )
+    BASE_URL = 'http://www.amazon.cn'
+    MAX_EDITIONS = 5
 
     def __init__(self, *args, **kwargs):
         Source.__init__(self, *args, **kwargs)
@@ -75,46 +68,29 @@ class Amazon_CN(Source):
         self.set_amazon_id_touched_fields()
 
     def set_amazon_id_touched_fields(self):
-        ident_name = "identifier:amazon"
-        if self.domain == 'cn':
-            ident_name += '_' + self.domain
+        ident_name = "identifier:amazon_cn"
         tf = [x for x in self.touched_fields if not
-                x.startswith('identifier:amazon')] + [ident_name]
+                x.startswith('identifier:amazon_cn')] + [ident_name]
         self.touched_fields = frozenset(tf)
 
-    def get_domain_and_asin(self, identifiers):
+    def get_asin(self, identifiers):
         for key, val in identifiers.iteritems():
             key = key.lower()
-            if key in ('amazon', 'asin'):
-                return 'cn', val
-            if key.startswith('amazon_'):
-                domain = key.split('_')[-1]
-                if domain and domain in self.AMAZON_DOMAINS:
-                    return domain, val
-        return None, None
+            if key in ('amazon_cn', 'asin'):
+                return val
+        return None
 
     def get_book_url(self, identifiers):  # {{{
-        domain, asin = self.get_domain_and_asin(identifiers)
-        if domain and asin:
+        asin = self.get_asin(identifiers)
+        if asin:
             url = 'http://www.amazon.cn/dp/'+asin
-            idtype = 'amazon' if domain == 'com' else 'amazon_'+domain
-                return (idtype, asin, url)
+            idtype = 'amazon_cn'
+            return (idtype, asin, url)
 
     def get_book_url_name(self, idtype, idval, url):
         if idtype == 'amazon_cn':
             return self.name
     # }}}
-
-    @property
-    def domain(self):
-        x = getattr(self, 'testing_domain', None)
-        if x is not None:
-            return x
-        domain = self.prefs['domain']
-        if domain not in self.AMAZON_DOMAINS:
-            domain = 'com'
-
-        return domain
 
     def clean_downloaded_metadata(self, mi):
         docase = (
@@ -128,25 +104,15 @@ class Amazon_CN(Source):
             mi.tags = list(map(fixcase, mi.tags))
         mi.isbn = check_isbn(mi.isbn)
 
-    def create_query(self, log, title=None, authors=None, identifiers={},  # {{{
-            domain=None):
+    def create_query(self, log, title=None, authors=None, identifiers={}): # {{{
         from urllib import urlencode
-        if domain is None:
-            domain = self.domain
 
-        idomain, asin = self.get_domain_and_asin(identifiers)
-        if idomain is not None:
-            domain = idomain
+        asin = self.get_asin(identifiers)
 
         # See the amazon detailed search page to get all options
         q = {'search-alias': 'aps',
-             'unfiltered': '1',
-            }
-
-        if domain == 'com':
-            q['sort'] = 'relevanceexprank'
-        else:
-            q['sort'] = 'relevancerank'
+             'unfiltered': '1', }
+        q['sort'] = 'relevance_rank'
 
         isbn = check_isbn(identifiers.get('isbn', None))
 
@@ -156,7 +122,7 @@ class Amazon_CN(Source):
             q['field-isbn'] = isbn
         else:
             # Only return book results
-            q['search-alias'] = 'digital-text' if domain == 'br' else 'stripbooks'
+            q['search-alias'] = 'digital-text'
             if title:
                 title_tokens = list(self.get_title_tokens(title))
                 if title_tokens:
@@ -173,31 +139,18 @@ class Amazon_CN(Source):
             return None, None
 
         # magic parameter to enable Japanese Shift_JIS encoding.
-        if domain == 'jp':
-            q['__mk_ja_JP'] = u'カタカナ'
+        q['__mk_zh_CN'] = u'亚马逊网站'
 
-        if domain == 'jp':
-            encode_to = 'Shift_JIS'
-        else:
-            encode_to = 'latin1'
-        encoded_q = dict([(x.encode(encode_to, 'ignore'), y.encode(encode_to,
-            'ignore')) for x, y in
-            q.iteritems()])
-        udomain = domain
-        if domain == 'uk':
-            udomain = 'co.uk'
-        elif domain == 'jp':
-            udomain = 'co.jp'
-        elif domain == 'br':
-            udomain = 'com.br'
-        url = 'http://www.amazon.%s/s/?'%udomain + urlencode(encoded_q)
-        return url, domain
+        encode_to = 'utf8'
+        encoded_q = dict([(x.encode(encode_to, 'ignore'), y.encode(encode_to, 'ignore')) for x, y in q.iteritems()])
+        url = 'http://www.amazon.cn/s/?' + urlencode(encoded_q)
+        return url
 
     # }}}
 
     def get_cached_cover_url(self, identifiers):  # {{{
         url = None
-        domain, asin = self.get_domain_and_asin(identifiers)
+        asin = self.get_asin(identifiers)
         if asin is None:
             isbn = identifiers.get('isbn', None)
             if isbn is not None:
