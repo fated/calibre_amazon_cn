@@ -10,7 +10,7 @@ import socket, time, re
 from threading import Thread
 from Queue import Queue, Empty
 
-from calibre import as_unicode, random_user_agent
+from calibre import as_unicode
 from calibre.ebooks.metadata import check_isbn
 from calibre.ebooks.metadata.sources.base import (Source, Option, fixcase, fixauthors)
 from calibre.ebooks.metadata.book.base import Metadata
@@ -58,11 +58,6 @@ class Amazon_CN(Source):
             elif mi.is_null(key):
                 return key
 
-    @property
-    def user_agent(self):
-        # Pass in an index to random_user_agent() to test with a particular user agent
-        return random_user_agent()
-
     def save_settings(self, *args, **kwargs):
         Source.save_settings(self, *args, **kwargs)
         self.set_amazon_id_touched_fields()
@@ -92,18 +87,6 @@ class Amazon_CN(Source):
             return self.name
     # }}}
 
-    def clean_downloaded_metadata(self, mi):
-        docase = (
-            mi.language == 'eng' or
-            (mi.is_null('language') and self.domain in {'com', 'uk'})
-        )
-        if mi.title and docase:
-            mi.title = fixcase(mi.title)
-        mi.authors = fixauthors(mi.authors)
-        if mi.tags and docase:
-            mi.tags = list(map(fixcase, mi.tags))
-        mi.isbn = check_isbn(mi.isbn)
-
     def create_query(self, log, title=None, authors=None, identifiers={}): # {{{
         from urllib import urlencode
 
@@ -121,7 +104,7 @@ class Amazon_CN(Source):
         elif isbn is not None:
             q['field-isbn'] = isbn
         else:
-            # Only return book results
+            # Only return digital-book results
             q['search-alias'] = 'digital-text'
             if title:
                 title_tokens = list(self.get_title_tokens(title))
@@ -136,9 +119,9 @@ class Amazon_CN(Source):
         if not ('field-keywords' in q or 'field-isbn' in q or
                 ('field-title' in q)):
             # Insufficient metadata to make an identify query
-            return None, None
+            return None
 
-        # magic parameter to enable Japanese Shift_JIS encoding.
+        # magic parameter to enable Chinese GBK encoding.
         q['__mk_zh_CN'] = u'亚马逊网站'
 
         encode_to = 'utf8'
@@ -201,8 +184,7 @@ class Amazon_CN(Source):
         return matches[:MAX_EDITIONS]
     # }}}
 
-    def identify(self, log, result_queue, abort, title=None, authors=None,  # {{{
-            identifiers={}, timeout=30):
+    def identify(self, log, result_queue, abort, title=None, authors=None, identifiers={}, timeout=30):  # {{{
         '''
         Note this method will retry without identifiers automatically if no match is found with identifiers.
         '''
@@ -213,7 +195,7 @@ class Amazon_CN(Source):
 
         testing = getattr(self, 'running_a_test', False)
 
-        query, domain = self.create_query(log, title=title, authors=authors,
+        query = self.create_query(log, title=title, authors=authors,
                 identifiers=identifiers)
         if query is None:
             log.error('Insufficient metadata to construct query')
@@ -310,8 +292,7 @@ class Amazon_CN(Source):
         if cached_url is None:
             log.info('No cached cover found, running identify')
             rq = Queue()
-            self.identify(log, rq, abort, title=title, authors=authors,
-                    identifiers=identifiers)
+            self.identify(log, rq, abort, title=title, authors=authors, identifiers=identifiers)
             if abort.is_set():
                 return
             results = []
@@ -336,7 +317,8 @@ class Amazon_CN(Source):
         log('Downloading cover from:', cached_url)
         try:
             cdata = br.open_novisit(cached_url, timeout=timeout).read()
-            result_queue.put((self, cdata))
+            if cdata:
+                result_queue.put((self, cdata))
         except:
             log.exception('Failed to download cover from:', cached_url)
     # }}}
