@@ -168,9 +168,8 @@ class Amazon_CN(Source):
 
         def title_ok(title):
             title = title.lower()
-            bad = ['bulk pack', '[audiobook]', '[audio cd]', '(a book companion)', '( slipcase with door )']
-            if self.domain == 'com':
-                bad.extend(['(%s edition)' % x for x in ('spanish', 'german')])
+            bad = []
+            # bad.extend(['(%s edition)' % x for x in ('spanish', 'german')])
             for x in bad:
                 if x in title:
                     return False
@@ -198,16 +197,14 @@ class Amazon_CN(Source):
                         matches.append(a.get('href'))
                     break
 
-        # Keep only the top 5 matches as the matches are sorted by relevance by
-        # Amazon so lower matches are not likely to be very relevant
-        return matches[:5]
+        # Keep only the top MAX_EDITIONS matches as the matches are sorted by relevance by Amazon so lower matches are not likely to be very relevant
+        return matches[:MAX_EDITIONS]
     # }}}
 
     def identify(self, log, result_queue, abort, title=None, authors=None,  # {{{
             identifiers={}, timeout=30):
         '''
-        Note this method will retry without identifiers automatically if no
-        match is found with identifiers.
+        Note this method will retry without identifiers automatically if no match is found with identifiers.
         '''
         from calibre.utils.cleantext import clean_ascii_chars
         from calibre.ebooks.chardet import xml_to_unicode
