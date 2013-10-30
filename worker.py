@@ -1,10 +1,36 @@
+#!/usr/bin/env python
+# vim:fileencoding=UTF-8:ts=4:sw=4:sta:et:sts=4:ai
+from __future__ import (unicode_literals, division, absolute_import,
+                        print_function)
+
+__license__   = 'GPL v3'
+__copyright__ = '2011, Grant Drake <grant.drake@gmail.com>; 2013, Bruce Chou <brucechou24@gmail.com>'
+__docformat__ = 'restructuredtext en'
+
+import socket, re, datetime
+from collections import OrderedDict
+from threading import Thread
+
+from lxml.html import fromstring, tostring
+
+from calibre.ebooks.metadata.book.base import Metadata
+from calibre.library.comments import sanitize_comments_html
+from calibre.utils.cleantext import clean_ascii_chars
+from calibre.utils.localization import canonicalize_lang
+
+def CSSSelect(expr):
+    from cssselect import HTMLTranslator
+    from lxml.etree import XPath
+    return XPath(HTMLTranslator().css_to_xpath(expr))
+
 class Worker(Thread):  # Get details {{{
 
     '''
     Get book details from amazons book page in a separate thread
     '''
 
-    def __init__(self, url, result_queue, browser, log, relevance, plugin, timeout=20, testing=False):
+    def __init__(self, url, result_queue, browser, log, relevance, plugin, 
+            timeout=20, testing=False):
         Thread.__init__(self)
         self.daemon = True
         self.testing = testing
@@ -16,8 +42,7 @@ class Worker(Thread):  # Get details {{{
         from lxml.html import tostring
         self.tostring = tostring
 
-        months = {
-            'cn': {
+        self.months = {
             1: [u'1月'],
             2: [u'2月'],
             3: [u'3月'],
@@ -30,13 +55,10 @@ class Worker(Thread):  # Get details {{{
             10: [u'10月'],
             11: [u'11月'],
             12: [u'12月'],
-            },
-
         }
 
         self.english_months = [None, 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-        self.months = months.get(cn, {})
 
         self.pd_xpath = '''
             //h2[starts-with(text(), "基本信息")]/../div[@class="content"]
@@ -84,14 +106,14 @@ class Worker(Thread):  # Get details {{{
                 ''', re.X)
 
     def delocalize_datestr(self, raw):
-        if not self.months:
-            return raw
-        ans = raw.lower()
-        for i, vals in self.months.iteritems():
-            for x in vals:
-                ans = ans.replace(x, self.english_months[i])
-        ans = ans.replace(' de ', ' ')
-        return ans
+        if raw:
+            ans = raw
+            ans = ans.replace(u'年', ' ')
+            ans = ans.replace(u'日', '')
+            for i, vals in self.months.iteritems():
+                for x in vals:
+                    ans = ans.replace(x, self.english_months[i]+' ')
+            return ans
 
     def run(self):
         try:
@@ -326,7 +348,7 @@ class Worker(Thread):  # Get details {{{
                 t = elem.get('title').strip()
                 m = self.ratings_pat.match(t)
                 if m is not None:
-                    return float(m.group(1))/float(m.group(3)) * 5
+                    return float(m.group(2))
 
     def _render_comments(self, desc):
         from calibre.library.comments import sanitize_comments_html

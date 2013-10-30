@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # vim:fileencoding=UTF-8:ts=4:sw=4:sta:et:sts=4:ai
-from __future__ import (unicode_literals, division, absolute_import, print_function)
+from __future__ import (unicode_literals, division, absolute_import, 
+                        print_function)
 
 __license__   = 'GPL v3'
 __copyright__ = '2011, Grant Drake <grant.drake@gmail.com>; 2013, Bruce Chou <brucechou24@gmail.com>'
@@ -12,19 +13,16 @@ from Queue import Queue, Empty
 
 from calibre import as_unicode
 from calibre.ebooks.metadata import check_isbn
-from calibre.ebooks.metadata.sources.base import (Source, Option, fixcase, fixauthors)
+from calibre.ebooks.metadata.sources.base import (Source, Option, fixcase, 
+        fixauthors)
 from calibre.ebooks.metadata.book.base import Metadata
 from calibre.utils.localization import canonicalize_lang
 
-def CSSSelect(expr):
-    from cssselect import HTMLTranslator
-    from lxml.etree import XPath
-    return XPath(HTMLTranslator().css_to_xpath(expr))
-
 class Amazon_CN(Source):
 
-    name = 'Amazon_CN'
+    name = 'Amazon.cn'
     description = _('Downloads metadata and covers from Amazon.cn')
+
     author = 'Bruce Chou'
     version = (0, 1, 0)
     minimum_calibre_version = (0, 8, 0)
@@ -36,12 +34,10 @@ class Amazon_CN(Source):
     has_html_comments = True
     supports_gzip_transfer_encoding = True
 
-    BASE_URL = 'http://www.amazon.cn'
     MAX_EDITIONS = 5
 
     def __init__(self, *args, **kwargs):
         Source.__init__(self, *args, **kwargs)
-        self.set_amazon_id_touched_fields()
 
     def test_fields(self, mi):
         '''
@@ -50,23 +46,10 @@ class Amazon_CN(Source):
         for key in self.touched_fields:
             if key.startswith('identifier:'):
                 key = key.partition(':')[-1]
-                if key == 'amazon':
-                    if self.domain == 'cn':
-                        key += '_' + self.domain
                 if not mi.has_identifier(key):
                     return 'identifier:' + key
             elif mi.is_null(key):
                 return key
-
-    def save_settings(self, *args, **kwargs):
-        Source.save_settings(self, *args, **kwargs)
-        self.set_amazon_id_touched_fields()
-
-    def set_amazon_id_touched_fields(self):
-        ident_name = "identifier:amazon_cn"
-        tf = [x for x in self.touched_fields if not
-                x.startswith('identifier:amazon_cn')] + [ident_name]
-        self.touched_fields = frozenset(tf)
 
     def get_asin(self, identifiers):
         for key, val in identifiers.iteritems():
@@ -75,7 +58,7 @@ class Amazon_CN(Source):
                 return val
         return None
 
-    def get_book_url(self, identifiers):  # {{{
+    def get_book_url(self, identifiers):
         asin = self.get_asin(identifiers)
         if asin:
             url = 'http://www.amazon.cn/dp/'+asin
@@ -83,9 +66,18 @@ class Amazon_CN(Source):
             return (idtype, asin, url)
 
     def get_book_url_name(self, idtype, idval, url):
-        if idtype == 'amazon_cn':
-            return self.name
-    # }}}
+        return self.name
+
+    def clean_downloaded_metadata(self, mi):
+        docase = (
+            mi.language == 'eng' or mi.is_null('language')
+        )
+        if mi.title and docase:
+            mi.title = fixcase(mi.title)
+        mi.authors = fixauthors(mi.authors)
+        if mi.tags and docase:
+            mi.tags = list(map(fixcase, mi.tags))
+        mi.isbn = check_isbn(mi.isbn)
 
     def create_query(self, log, title=None, authors=None, identifiers={}): # {{{
         from urllib import urlencode
@@ -94,7 +86,8 @@ class Amazon_CN(Source):
 
         # See the amazon detailed search page to get all options
         q = {'search-alias': 'aps',
-             'unfiltered': '1', }
+             'unfiltered': '1', 
+            }
         q['sort'] = 'relevance_rank'
 
         isbn = check_isbn(identifiers.get('isbn', None))
@@ -125,7 +118,9 @@ class Amazon_CN(Source):
         q['__mk_zh_CN'] = u'亚马逊网站'
 
         encode_to = 'utf8'
-        encoded_q = dict([(x.encode(encode_to, 'ignore'), y.encode(encode_to, 'ignore')) for x, y in q.iteritems()])
+        encoded_q = dict([(x.encode(encode_to, 'ignore'), y.encode(encode_to,
+            'ignore')) for x, y in 
+            q.iteritems()])
         url = 'http://www.amazon.cn/s/?' + urlencode(encoded_q)
         return url
 
@@ -151,8 +146,7 @@ class Amazon_CN(Source):
 
         def title_ok(title):
             title = title.lower()
-            bad = []
-            # bad.extend(['(%s edition)' % x for x in ('spanish', 'german')])
+            bad = ['[Kindle版]']
             for x in bad:
                 if x in title:
                     return False
@@ -181,12 +175,14 @@ class Amazon_CN(Source):
                     break
 
         # Keep only the top MAX_EDITIONS matches as the matches are sorted by relevance by Amazon so lower matches are not likely to be very relevant
-        return matches[:MAX_EDITIONS]
+        return matches[:self.MAX_EDITIONS]
     # }}}
 
-    def identify(self, log, result_queue, abort, title=None, authors=None, identifiers={}, timeout=30):  # {{{
+    def identify(self, log, result_queue, abort, title=None, authors=None, 
+            identifiers={}, timeout=30):  # {{{
         '''
-        Note this method will retry without identifiers automatically if no match is found with identifiers.
+        Note this method will retry without identifiers automatically if no 
+        match is found with identifiers.
         '''
         from calibre.utils.cleantext import clean_ascii_chars
         from calibre.ebooks.chardet import xml_to_unicode
@@ -201,8 +197,7 @@ class Amazon_CN(Source):
             log.error('Insufficient metadata to construct query')
             return
         br = self.browser
-        if testing:
-            print ('Using user agent for amazon: %s'%self.user_agent)
+
         try:
             raw = br.open_novisit(query, timeout=timeout).read().strip()
         except Exception as e:
@@ -264,7 +259,8 @@ class Amazon_CN(Source):
             log.error('No matches found with query: %r'%query)
             return
 
-        workers = [Worker(url, result_queue, br, log, i, domain, self,
+        from calibre_plugins.Amazon_CN.worker import Worker
+        workers = [Worker(url, result_queue, br, log, i, self,
                             testing=testing) for i, url in enumerate(matches)]
 
         for w in workers:
@@ -286,13 +282,15 @@ class Amazon_CN(Source):
         return None
     # }}}
 
-    def download_cover(self, log, result_queue, abort,  # {{{
-            title=None, authors=None, identifiers={}, timeout=30, get_best_cover=False):
+    def download_cover(self, log, result_queue, abort, 
+            title=None, authors=None, identifiers={}, timeout=30, 
+            get_best_cover=False):
         cached_url = self.get_cached_cover_url(identifiers)
         if cached_url is None:
             log.info('No cached cover found, running identify')
             rq = Queue()
-            self.identify(log, rq, abort, title=title, authors=authors, identifiers=identifiers)
+            self.identify(log, rq, abort, title=title, authors=authors, 
+                    identifiers=identifiers)
             if abort.is_set():
                 return
             results = []
@@ -321,4 +319,20 @@ class Amazon_CN(Source):
                 result_queue.put((self, cdata))
         except:
             log.exception('Failed to download cover from:', cached_url)
-    # }}}
+# }}}
+
+if __name__ == '__main__':  # tests {{{
+    # To run these test use: calibre-debug -e __init__.py
+    from calibre.ebooks.metadata.sources.test import (test_identify_plugin, 
+            title_test, authors_test)
+
+    test_identify_plugin(Amazon_CN.name,
+        [
+            (
+                {'identifiers':{'amazon_cn': 'B00D7YRXPG'}},
+                [title_test('第七天', exact=True),
+                 authors_test(['余华'])
+                ]
+            ),
+
+        ])
