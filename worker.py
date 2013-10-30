@@ -417,7 +417,7 @@ class Worker(Thread):  # Get details {{{
     def parse_tags(self, root):
         ans = []
         exclude_tokens = {'kindle', 'a-z'}
-        exclude = {'special features', 'by authors', 'authors & illustrators', 'books', 'new; used & rental textbooks'}
+        exclude = {u'kindle电子书', 'by authors', 'authors & illustrators', 'books', 'new; used & rental textbooks'}
         seen = set()
         for li in root.xpath(self.tags_xpath):
             for i, a in enumerate(li.iterdescendants('a')):
