@@ -24,7 +24,7 @@ class Amazon_CN(Source):
     description = _('Downloads metadata and covers from Amazon.cn')
 
     author = 'Bruce Chou'
-    version = (0, 1, 0)
+    version = (0, 2, 0)
     minimum_calibre_version = (0, 8, 0)
 
     capabilities = frozenset(['identify', 'cover'])
