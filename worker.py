@@ -74,7 +74,7 @@ class Worker(Thread):  # Get details {{{
         self.language_names = {'语种'}
 
         self.tags_xpath = '''
-            descendant::h2[text() = "查找其它相似商品"]/../descendant::ul/li
+            descendant::h2[text() = "\t 查找其它相似商品"]/../descendant::ul/li
         '''
 
         self.ratings_pat = re.compile(r'(平均)([0-9.]+)( (星))')
