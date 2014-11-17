@@ -23,7 +23,7 @@ If you find this plugin useful please feel free to show your appreciation. I hav
 
 ### Version History:
 * __Version 0.3.0__ - 17 Nov 2014  
-    Fix parsing issue caused by new Amazon style.
+    Fix parsing issue caused by new Amazon style.  
     Fix extra CSS style info in title when parsing.
 * __Version 0.2.0__ - 04 Nov 2013  
     Add support for parsing tags.
