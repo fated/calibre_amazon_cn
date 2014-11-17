@@ -29,7 +29,7 @@ class Worker(Thread):  # Get details {{{
     Get book details from amazons book page in a separate thread
     '''
 
-    def __init__(self, url, result_queue, browser, log, relevance, plugin, 
+    def __init__(self, url, result_queue, browser, log, relevance, plugin,
             timeout=20, testing=False):
         Thread.__init__(self)
         self.daemon = True
@@ -301,7 +301,8 @@ class Worker(Thread):  # Get details {{{
                 h1.remove(child)
             return self.totext(h1)
         tdiv = root.xpath('//h1[contains(@class, "parseasinTitle")]')[0]
-        actual_title = tdiv.xpath('descendant::*[@id="btAsinTitle"]')
+        ttdiv = tdiv.xpath('descendant::*[@id="btAsinTitle"]')[0]
+        actual_title = ttdiv.xpath('descendant::*[@style="padding-left: 0"]')
         if actual_title:
             title = self.tostring(actual_title[0], encoding=unicode,
                     method='text').strip()

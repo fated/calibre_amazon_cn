@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # vim:fileencoding=UTF-8:ts=4:sw=4:sta:et:sts=4:ai
-from __future__ import (unicode_literals, division, absolute_import, 
+from __future__ import (unicode_literals, division, absolute_import,
                         print_function)
 
 __license__   = 'GPL v3'
@@ -11,9 +11,9 @@ import socket, time, re
 from threading import Thread
 from Queue import Queue, Empty
 
-from calibre import as_unicode
+from calibre import as_unicode, random_user_agent
 from calibre.ebooks.metadata import check_isbn
-from calibre.ebooks.metadata.sources.base import (Source, Option, fixcase, 
+from calibre.ebooks.metadata.sources.base import (Source, Option, fixcase,
         fixauthors)
 from calibre.ebooks.metadata.book.base import Metadata
 from calibre.utils.localization import canonicalize_lang
@@ -24,15 +24,16 @@ class Amazon_CN(Source):
     description = _('Downloads metadata and covers from Amazon.cn')
 
     author = 'Bruce Chou'
-    version = (0, 2, 0)
+    version = (0, 3, 0)
     minimum_calibre_version = (0, 8, 0)
 
     capabilities = frozenset(['identify', 'cover'])
     touched_fields = frozenset(['title', 'authors', 'identifier:amazon_cn',
-        'identifier:isbn', 'rating', 'comments', 'publisher', 'pubdate',
+        'rating', 'comments', 'publisher', 'pubdate',
         'languages', 'series'])
     has_html_comments = True
     supports_gzip_transfer_encoding = True
+    prefer_results_with_isbn = False
 
     MAX_EDITIONS = 5
 
@@ -50,6 +51,12 @@ class Amazon_CN(Source):
                     return 'identifier:' + key
             elif mi.is_null(key):
                 return key
+
+    @property
+    def user_agent(self):
+        # Pass in an index to random_user_agent() to test with a particular
+        # user agent
+        return random_user_agent()
 
     def get_asin(self, identifiers):
         for key, val in identifiers.iteritems():
@@ -86,7 +93,7 @@ class Amazon_CN(Source):
 
         # See the amazon detailed search page to get all options
         q = {'search-alias': 'aps',
-             'unfiltered': '1', 
+             'unfiltered': '1',
             }
         q['sort'] = 'relevance_rank'
 
@@ -117,9 +124,9 @@ class Amazon_CN(Source):
         # magic parameter to enable Chinese GBK encoding.
         q['__mk_zh_CN'] = u'亚马逊网站'
 
-        encode_to = 'utf8'
+        encode_to = 'utf-8'
         encoded_q = dict([(x.encode(encode_to, 'ignore'), y.encode(encode_to,
-            'ignore')) for x, y in 
+            'ignore')) for x, y in
             q.iteritems()])
         url = 'http://www.amazon.cn/s/?' + urlencode(encoded_q)
         return url
@@ -146,22 +153,35 @@ class Amazon_CN(Source):
 
         def title_ok(title):
             title = title.lower()
-            bad = ['[Kindle版]']
+            bad = [u'套装', u'[有声书]', u'[音频cd]']
             for x in bad:
                 if x in title:
                     return False
             return True
 
-        for div in root.xpath(r'//div[starts-with(@id, "result_")]'):
-            links = div.xpath(r'descendant::a[@class="title" and @href]')
-            if not links:
-                # New amazon markup
-                links = div.xpath('descendant::h3/a[@href]')
-            for a in links:
-                title = tostring(a, method='text', encoding=unicode)
-                if title_ok(title):
-                    matches.append(a.get('href'))
-                break
+        for a in root.xpath(r'//li[starts-with(@id, "result_")]//a[@href and contains(@class, "s-access-detail-page")]'):
+            title = tostring(a, method='text', encoding=unicode)
+            if title_ok(title):
+                url = a.get('href')
+                if url.startswith('/'):
+                    url = 'http://www.amazon.cn%s' % (url)
+                matches.append(url)
+
+        if not matches:
+            # Previous generation of results page markup
+            for div in root.xpath(r'//div[starts-with(@id, "result_")]'):
+                links = div.xpath(r'descendant::a[@class="title" and @href]')
+                if not links:
+                    # New amazon markup
+                    links = div.xpath('descendant::h3/a[@href]')
+                for a in links:
+                    title = tostring(a, method='text', encoding=unicode)
+                    if title_ok(title):
+                        url = a.get('href')
+                        if url.startswith('/'):
+                            url = 'http://www.amazon.cn%s' % (url)
+                        matches.append(url)
+                    break
 
         if not matches:
             # This can happen for some user agents that Amazon thinks are
@@ -171,17 +191,21 @@ class Amazon_CN(Source):
                 for a in td.xpath(r'descendant::td[@class="dataColumn"]/descendant::a[@href]/span[@class="srTitle"]/..'):
                     title = tostring(a, method='text', encoding=unicode)
                     if title_ok(title):
-                        matches.append(a.get('href'))
+                        url = a.get('href')
+                        if url.startswith('/'):
+                            url = 'http:/www.amazon.cn%s' % (url)
+                        matches.append(url)
                     break
 
-        # Keep only the top MAX_EDITIONS matches as the matches are sorted by relevance by Amazon so lower matches are not likely to be very relevant
+        # Keep only the top MAX_EDITIONS matches as the matches are sorted by relevance
+        # by Amazon so lower matches are not likely to be very relevant
         return matches[:self.MAX_EDITIONS]
     # }}}
 
-    def identify(self, log, result_queue, abort, title=None, authors=None, 
+    def identify(self, log, result_queue, abort, title=None, authors=None,
             identifiers={}, timeout=30):  # {{{
         '''
-        Note this method will retry without identifiers automatically if no 
+        Note this method will retry without identifiers automatically if no
         match is found with identifiers.
         '''
         from calibre.utils.cleantext import clean_ascii_chars
@@ -197,7 +221,8 @@ class Amazon_CN(Source):
             log.error('Insufficient metadata to construct query')
             return
         br = self.browser
-
+        if testing:
+            print ('Using user agent for amazon.cn: %s'%self.user_agent)
         try:
             raw = br.open_novisit(query, timeout=timeout).read().strip()
         except Exception as e:
@@ -208,7 +233,7 @@ class Amazon_CN(Source):
             attr = getattr(e, 'args', [None])
             attr = attr if attr else [None]
             if isinstance(attr[0], socket.timeout):
-                msg = _('Amazon timed out. Try again later.')
+                msg = _('Amazon.cn timed out. Try again later.')
                 log.error(msg)
             else:
                 msg = 'Failed to make identify query: %r'%query
@@ -259,7 +284,7 @@ class Amazon_CN(Source):
             log.error('No matches found with query: %r'%query)
             return
 
-        from calibre_plugins.Amazon_CN.worker import Worker
+        from calibre_plugins.AMAZON_CN.worker import Worker
         workers = [Worker(url, result_queue, br, log, i, self,
                             testing=testing) for i, url in enumerate(matches)]
 
@@ -282,14 +307,14 @@ class Amazon_CN(Source):
         return None
     # }}}
 
-    def download_cover(self, log, result_queue, abort, 
-            title=None, authors=None, identifiers={}, timeout=30, 
-            get_best_cover=False):
+    def download_cover(self, log, result_queue, abort,
+            title=None, authors=None, identifiers={}, timeout=30,
+            get_best_cover=False):  # {{{
         cached_url = self.get_cached_cover_url(identifiers)
         if cached_url is None:
             log.info('No cached cover found, running identify')
             rq = Queue()
-            self.identify(log, rq, abort, title=title, authors=authors, 
+            self.identify(log, rq, abort, title=title, authors=authors,
                     identifiers=identifiers)
             if abort.is_set():
                 return
@@ -319,11 +344,11 @@ class Amazon_CN(Source):
                 result_queue.put((self, cdata))
         except:
             log.exception('Failed to download cover from:', cached_url)
-# }}}
+    # }}}
 
 if __name__ == '__main__':  # tests {{{
     # To run these test use: calibre-debug -e __init__.py
-    from calibre.ebooks.metadata.sources.test import (test_identify_plugin, 
+    from calibre.ebooks.metadata.sources.test import (test_identify_plugin,
             title_test, authors_test)
 
     test_identify_plugin(Amazon_CN.name,
