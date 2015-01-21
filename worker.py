@@ -433,6 +433,19 @@ class Worker(Thread):  # Get details {{{
         return ans
 
     def parse_cover(self, root, raw=b""):
+        import urllib
+        imgs_url = 'http://z2-ec2.images-amazon.com/images/P/'+self.amazon_id+'.01.MAIN._SCRM_.jpg'
+
+        try:
+            res = urllib.urlopen(imgs_url)
+            code = res.getcode()
+            res.close()
+        except Exception,e:
+            code = 404
+
+        if code == 200:
+            return imgs_url
+
         imgs = root.xpath('//img[(@id="prodImage" or @id="original-main-image" or @id="main-image") and @src]')
         if not imgs:
             imgs = root.xpath('//div[@class="main-image-inner-wrapper"]/img[@src]')
