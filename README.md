@@ -22,6 +22,8 @@ If you find this plugin useful please feel free to show your appreciation. I hav
 </a>
 
 ### Version History:
+* __Version 0.3.1__ - 21 Jan 2015  
+    Replace original cover image with bigger cover image when parsing cover images from amazon, options to switch from these two choices will be added in the future updates.
 * __Version 0.3.0__ - 17 Nov 2014  
     Fix parsing issue caused by new Amazon style.  
     Fix extra CSS style info in title when parsing.
